@@ -97,15 +97,22 @@ class TelegramBotListener:
         if not text:
             return
 
+        cmd_word = text.split()[0].lower()
+
+        # Handle cancellation FIRST before checking conversational states
+        if cmd_word in ("/iptal", "iptal", "/cancel", "cancel"):
+            self.cmd_iptal(chat_id)
+            return
+
         state, state_data = get_user_state(chat_id)
         if state == "waiting_chest_count":
             self.handle_state_chest_count(chat_id, text, state_data)
             return
         elif state == "waiting_report_days":
-            self.handle_state_report_days(chat_id, text)
+            self.handle_state_report_days(chat_id, text, state_data)
             return
 
-        cmd = text.split()[0].lower()
+        cmd = cmd_word
 
         if cmd in ("/start", "/help", "/yardim"):
             self.cmd_help(chat_id)
@@ -121,29 +128,74 @@ class TelegramBotListener:
             self.cmd_sandik(chat_id, text)
         elif cmd == "/rapor":
             self.cmd_rapor(chat_id, text)
-        elif cmd == "/iptal":
-            clear_user_state(chat_id)
-            self.notifier.send_message("❌ İşlem iptal edildi.", target_chat_id=chat_id)
+
+    def cmd_iptal(self, chat_id: str):
+        """Cancel any pending user action or offer cancelling active boss cooldowns."""
+        state, state_data = get_user_state(chat_id)
+        clear_user_state(chat_id)
+
+        msg_id = state_data.get("message_id") if state_data else None
+        boss_key = state_data.get("boss_key") if state_data else None
+
+        if state == "waiting_chest_count":
+            b_name = BOSSES.get(boss_key, {}).get("name", "Boss") if boss_key else "Boss"
+            caption = (
+                f"👌 <b>SAYAÇ ÇALIŞIYOR</b>\n\n"
+                f"<blockquote>{b_name} için sandık girişi iptal edildi.\n"
+                f"Soğuma süresi dolduğunda bildirim gönderilecektir.</blockquote>"
+            )
+            if msg_id:
+                self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=msg_id, reply_markup=None)
+            else:
+                self.notifier.send_message(caption, target_chat_id=chat_id)
+            return
+
+        if state == "waiting_report_days":
+            msg = (
+                "❌ <b>RAPOR İPTAL EDİLDİ</b>\n\n"
+                "<blockquote>Özel gün sayısı girişi iptal edildi.</blockquote>"
+            )
+            if msg_id:
+                self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=msg_id, reply_markup=None)
+            else:
+                self.notifier.send_message(msg, target_chat_id=chat_id)
+            return
+
+        # If no conversational state was waiting, check active timers
+        timers = get_active_timers(chat_id)
+        if timers:
+            buttons = []
+            for t in timers:
+                buttons.append([{"text": f"🗑️ {t['boss_name']} Sayacını İptal Et", "callback_data": f"canceltimer:{t['boss_key']}"}])
+            buttons.append([{"text": "❌ Kapat", "callback_data": "close_menu"}])
+            msg = (
+                "⏱️ <b>AKTİF BOSS SAYAÇLARI</b>\n\n"
+                "<blockquote>Bekleyen bir veri girişi bulunmuyor.\n"
+                "İptal etmek istediğiniz aktif boss sayacını seçebilirsiniz:</blockquote>"
+            )
+            self.notifier.send_message(msg, reply_markup={"inline_keyboard": buttons}, target_chat_id=chat_id)
+        else:
+            msg = (
+                "❌ <b>İPTAL EDİLECEK İŞLEM YOK</b>\n\n"
+                "<blockquote>Şu anda iptal edilecek bekleyen bir sayı girişi veya aktif boss sayacı bulunmuyor.</blockquote>"
+            )
+            self.notifier.send_message(msg, target_chat_id=chat_id)
 
     def cmd_help(self, chat_id: str):
         msg = (
-            "✨ ━━━━━━━━━━━━━━━━━━━━ ✨\n"
-            "⚔️ <b>METİN2 FARM & BİLDİRİM ASİSTANI</b> ⚔️\n"
-            "✨ ━━━━━━━━━━━━━━━━━━━━ ✨\n\n"
-            "Aşağıdaki komutlarla farmınızı ve etkinliklerinizi kolayca takip edebilirsiniz:\n\n"
-            "⏱️ <b>Boss Soğuma & Sayaç:</b>\n"
-            "• <code>/bosscd</code> : Boss menüsünü açar, kestiğiniz bossun sayacını başlatır (Fotoğraflı Kart).\n"
-            "• <code>/favori</code> : Sık kestiğiniz bossları favorilere ekler (Tek tıkla başlatma).\n"
-            "• <code>/kalan</code> : Aktif tüm boss sayaçlarını ve kalan süreleri gösterir.\n\n"
+            "⚔️ <b>METİN2 FARM & BİLDİRİM ASİSTANI</b>\n\n"
+            "<blockquote>⏱️ <b>Boss Soğuma & Sayaç:</b>\n"
+            "• <code>/bosscd</code> : Boss menüsü & fotoğraf kartı\n"
+            "• <code>/favori</code> : Sık kestiğiniz bossları favorilere ekler\n"
+            "• <code>/kalan</code> : Aktif sayaçları ve kalan süreleri gösterir\n\n"
             "📅 <b>Etkinlik Takvimi:</b>\n"
-            "• <code>/takvim</code> : Marmara & Bagjanamu günün ve haftanın drop etkinliklerini gösterir.\n\n"
-            "📦 <b>Sandık Takibi & Raporlama:</b>\n"
-            "• <code>/sandik</code> : Hızlı sandık ekleme menüsünü açar.\n"
-            "  <i>Örnek kısayol: <code>/sandik nemere 3</code></i>\n"
-            "• <code>/rapor</code> : Günlük, haftalık ve tüm zamanlar sandık raporunu verir.\n"
-            "  <i>Örnek kısayol: <code>/rapor 3</code> (Son 3 günün raporu)</i>\n\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "🛡️ <i>Otomatik Happy Hour, Bakım ve Sunucu Durum bildirimleri de arka planda aktiftir.</i>"
+            "• <code>/takvim</code> : Marmara & Bagjanamu drop takvimi\n\n"
+            "📦 <b>Sandık Takibi & Rapor:</b>\n"
+            "• <code>/sandik</code> : Hızlı sandık ekleme menüsü\n"
+            "• <code>/rapor</code> : Günlük, haftalık ve tüm zamanlar dökümü\n\n"
+            "❌ <b>İptal & Kapatma:</b>\n"
+            "• <code>/iptal</code> : Sayı girişini veya aktif boss sayacını iptal eder</blockquote>\n\n"
+            "🛡️ <i>Otomatik Happy Hour, Bakım ve Sunucu Durum takibi 7/24 aktiftir.</i>"
         )
         self.notifier.send_message(msg, target_chat_id=chat_id)
 
@@ -177,16 +229,17 @@ class TelegramBotListener:
 
         # 3. Favorite manager button
         fav_btn_label = "⭐ Favorileri Düzenle" if favorites else "⭐ Favori Boss Ekle"
-        buttons.append([{"text": fav_btn_label, "callback_data": "fav:menu"}])
+        buttons.append([
+            {"text": fav_btn_label, "callback_data": "fav:menu"},
+            {"text": "❌ Kapat", "callback_data": "close_menu"}
+        ])
 
         keyboard = {"inline_keyboard": buttons}
         msg = "⚔️ <b>BOSS SOĞUMA SÜRESİ BAŞLAT</b>\n\n"
         if favorites:
-            msg += "⭐ <b>FAVORİ BOSSLARINIZ:</b> <i>(Tek tıkla sayacı başlatın)</i>\n\n"
-        msg += (
-            "📁 <b>TÜM KATEGORİLER:</b>\n"
-            "<i>(Kategori seçip bossa tıklayarak sayacı başlatabilirsiniz)</i>"
-        )
+            msg += "<blockquote>⭐ <b>Favoriler:</b> Tek tıkla sayacı başlatın\n📁 <b>Kategoriler:</b> Listeden boss seçin</blockquote>"
+        else:
+            msg += "<blockquote>📁 Kestiğiniz bossun kategorisini seçin:</blockquote>"
         self.notifier.send_message(msg, reply_markup=keyboard, target_chat_id=chat_id)
 
     def cmd_favori(self, chat_id: str):
@@ -198,24 +251,31 @@ class TelegramBotListener:
         timers = get_active_timers(chat_id)
         if not timers:
             msg = (
-                "⏳ <b>Aktif Boss Sayacı Bulunmuyor</b>\n\n"
-                "Şu anda bekleyen bir boss sayacınız yok.\n"
-                "Yeni sayaç başlatmak için <code>/bosscd</code> yazabilirsiniz."
+                "⏳ <b>AKTİF BOSS SAYACI YOK</b>\n\n"
+                "<blockquote>Şu anda bekleyen bir boss sayacınız bulunmuyor.</blockquote>\n\n"
+                "Yeni sayaç başlatmak için: <code>/bosscd</code>"
             )
             self.notifier.send_message(msg, target_chat_id=chat_id)
             return
 
-        lines = ["⏳ <b>AKTİF BOSS SOĞUMA SÜRELERİ</b>", "━━━━━━━━━━━━━━━━━━━━"]
+        lines = ["⏳ <b>AKTİF BOSS SOĞUMA SÜRELERİ</b>\n"]
+        b_lines = []
+        buttons = []
         for t in timers:
             boss_info = BOSSES.get(t["boss_key"], {})
             icon = boss_info.get("icon", "⚔️")
-            lines.append(f"{icon} <b>{t['boss_name']}</b>")
-            lines.append(f"   ⏱️ Kalan: <code>{t['remaining_str']}</code>")
-            lines.append(f"   🔔 Bitiş Saati: <code>{t['end_time_str']}</code>\n")
+            b_lines.append(f"{icon} <b>{t['boss_name']}</b>\n   ⏳ Kalan: <code>{t['remaining_str']}</code> (Bitiş: {t['end_time_str']} TSİ)")
+            buttons.append([{"text": f"🗑️ {t['boss_name']} Sayacını İptal Et", "callback_data": f"canceltimer:{t['boss_key']}"}])
 
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        buttons.append([
+            {"text": "🔄 Yenile", "callback_data": "kalan:refresh"},
+            {"text": "❌ Kapat", "callback_data": "close_menu"}
+        ])
+
+        lines.append(f"<blockquote>{chr(10).join(b_lines)}</blockquote>\n")
         lines.append("<i>Süre dolduğunda bot size fotoğraflı bildirim gönderecektir.</i>")
-        self.notifier.send_message("\n".join(lines), target_chat_id=chat_id)
+        keyboard = {"inline_keyboard": buttons}
+        self.notifier.send_message("\n".join(lines), reply_markup=keyboard, target_chat_id=chat_id)
 
     # =========================================================================
     # SANDIK & RAPOR COMMANDS
@@ -237,9 +297,10 @@ class TelegramBotListener:
                 res = add_chest_drop(chat_id, b_key, b_data["name"], count)
                 img = get_boss_image(b_key)
                 caption = (
-                    f"✅ <b>{count} adet {b_data['name']} Sandığı</b> kaydedildi!\n\n"
-                    f"📅 Bugünkü toplam: <b>{res['today_total']} adet</b>\n"
-                    f"🏆 Tüm zamanlar: <b>{res['all_time_total']} adet</b>"
+                    f"✅ <b>{count} ADET {b_data['name'].upper()} SANDIĞI KAYDEDİLDİ</b>\n\n"
+                    f"<blockquote>📅 <b>Bugün:</b> <code>{res['today_total']} adet</code>\n"
+                    f"🏆 <b>Tüm Zamanlar:</b> <code>{res['all_time_total']} adet</code></blockquote>\n\n"
+                    f"<i>Raporları görüntülemek için /rapor yazabilirsiniz.</i>"
                 )
                 self.notifier.send_photo(photo_url=img, caption=caption, target_chat_id=chat_id)
                 return
@@ -247,9 +308,10 @@ class TelegramBotListener:
         buttons = []
         for cat_key, cat_data in BOSS_CATEGORIES.items():
             buttons.append([{"text": cat_data["title"], "callback_data": f"chestcat:{cat_key}"}])
+        buttons.append([{"text": "❌ Kapat", "callback_data": "close_menu"}])
 
         keyboard = {"inline_keyboard": buttons}
-        msg = "📦 <b>SANDIK EKLEME MENÜSÜ</b>\n\nSandık eklemek istediğiniz bossun kategorisini seçin:"
+        msg = "📦 <b>SANDIK EKLEME MENÜSÜ</b>\n\n<blockquote>Sandık eklemek istediğiniz bossun kategorisini seçin:</blockquote>"
         self.notifier.send_message(msg, reply_markup=keyboard, target_chat_id=chat_id)
 
     def cmd_rapor(self, chat_id: str, text: str):
@@ -287,43 +349,50 @@ class TelegramBotListener:
                 {"text": "📊 Tüm Zamanlar", "callback_data": "rep:all"},
             ],
             [
-                {"text": "🔢 Özel Gün Sayısı Gir", "callback_data": "rep:custom"},
+                {"text": "🔢 Özel Gün Sayısı", "callback_data": "rep:custom"},
+                {"text": "❌ Kapat", "callback_data": "close_menu"},
             ]
         ]
         keyboard = {"inline_keyboard": buttons}
-        msg = "📊 <b>METİN2 SANDIK RAPORU</b>\n\nRaporlamak istediğiniz zaman aralığını seçin:"
+        msg = "📊 <b>METİN2 SANDIK RAPORU</b>\n\n<blockquote>Raporlamak istediğiniz zaman aralığını seçin:</blockquote>"
         self.notifier.send_message(msg, reply_markup=keyboard, target_chat_id=chat_id)
 
     def send_report(self, chat_id: str, days: int = None, message_id: int = None):
-        """Generate and display chest report."""
+        """Generate and display chest report with elite card styling."""
         rep = get_chest_report(chat_id, days=days)
         period = rep["period_name"]
         total = rep["grand_total"]
         breakdown = rep["breakdown"]
 
-        lines = [
-            "📊 ━━━━━━━━━━━━━━━━━━━━ 📊",
-            f"📦 <b>SANDIK RAPORU ({period.upper()})</b>",
-            "📊 ━━━━━━━━━━━━━━━━━━━━ 📊",
-            "",
-        ]
+        msg = (
+            f"📊 <b>METİN2 SANDIK RAPORU</b>\n"
+            f"🗓️ <b>Dönem:</b> <code>{period.upper()}</code>\n\n"
+        )
 
         if not breakdown or total == 0:
-            lines.append("<i>Bu dönemde henüz kaydedilmiş bir sandık bulunmuyor.</i>\n")
+            msg += (
+                "<blockquote>ℹ️ <i>Bu dönemde henüz kaydedilmiş bir sandık bulunmuyor.</i></blockquote>\n\n"
+            )
         else:
+            b_lines = []
             for boss_name, count in breakdown:
                 matched = get_boss_by_name(boss_name)
                 icon = matched[1].get("icon", "📦") if matched else "📦"
-                lines.append(f"{icon} <b>{boss_name}:</b> <code>{count} adet</code>")
+                b_lines.append(f"{icon} <b>{boss_name}:</b> <code>{count} adet</code>")
 
-            lines.append("")
-            lines.append("━━━━━━━━━━━━━━━━━━━━")
-            lines.append(f"🏆 <b>Toplam Sandık:</b> <b>{total} adet</b>")
+            msg += (
+                f"<blockquote>{chr(10).join(b_lines)}\n\n"
+                f"🏆 <b>Toplam Sandık:</b> <code>{total} adet</code></blockquote>\n\n"
+            )
 
-        lines.append(f"\n🕒 <i>Oluşturulma: {rep['generated_at']}</i>")
-        msg = "\n".join(lines)
+        msg += f"🕒 <i>Rapor Tarihi: {rep['generated_at']}</i>"
 
-        back_kb = {"inline_keyboard": [[{"text": "🔄 Farklı Dönem Seç", "callback_data": "rep:menu"}]]}
+        back_kb = {"inline_keyboard": [
+            [
+                {"text": "🔄 Farklı Dönem Seç", "callback_data": "rep:menu"},
+                {"text": "❌ Kapat", "callback_data": "close_menu"}
+            ]
+        ]}
 
         if message_id:
             self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=back_kb)
@@ -341,6 +410,32 @@ class TelegramBotListener:
         data = query.get("data", "")
 
         self.notifier.answer_callback_query(query_id)
+
+        # 0. Close menu or cancel actions
+        if data == "close_menu":
+            deleted = self.notifier.delete_message(chat_id, message_id)
+            if not deleted:
+                self.notifier.edit_message_text("❌ <i>Menü kapatıldı.</i>", chat_id=chat_id, message_id=message_id, reply_markup=None)
+            return
+
+        if data == "cancel_state":
+            state, state_data = get_user_state(chat_id)
+            clear_user_state(chat_id)
+            if state == "waiting_chest_count":
+                boss_key = state_data.get("boss_key") if state_data else None
+                b_name = BOSSES.get(boss_key, {}).get("name", "Boss") if boss_key else "Boss"
+                caption = (
+                    f"👌 <b>SAYAÇ ÇALIŞIYOR</b>\n\n"
+                    f"<blockquote>{b_name} için sandık girişi iptal edildi.\n"
+                    f"Soğuma süresi tamamlandığında bildirim gönderilecektir.</blockquote>"
+                )
+                self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=message_id, reply_markup=None)
+            elif state == "waiting_report_days":
+                msg = "❌ <b>Rapor günü girişi iptal edildi.</b>"
+                self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=None)
+            else:
+                self.notifier.edit_message_text("❌ <b>İşlem iptal edildi.</b>", chat_id=chat_id, message_id=message_id, reply_markup=None)
+            return
 
         # 1. Back to main categories
         if data in ("cat:back", "boss:back_cat"):
@@ -361,10 +456,11 @@ class TelegramBotListener:
                 ],
                 [
                     {"text": "🔢 Özel Gün Sayısı Gir", "callback_data": "rep:custom"},
+                    {"text": "❌ Kapat", "callback_data": "close_menu"},
                 ]
             ]
             keyboard = {"inline_keyboard": buttons}
-            msg = "📊 <b>METİN2 SANDIK RAPORU</b>\n\nRaporlamak istediğiniz zaman aralığını seçin:"
+            msg = "📊 <b>METİN2 SANDIK RAPORU</b>\n\n<blockquote>Raporlamak istediğiniz zaman aralığını seçin:</blockquote>"
             self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
             return
 
@@ -400,13 +496,18 @@ class TelegramBotListener:
 
             res = add_chest_drop(chat_id, boss_key, b_name, count)
             caption = (
-                f"✅ <b>{count} adet {b_name} Sandığı</b> kaydedildi!\n\n"
-                f"📅 <b>Bugünkü Toplam:</b> {res['today_total']} adet\n"
-                f"🏆 <b>Tüm Zamanlar:</b> {res['all_time_total']} adet\n\n"
+                f"✅ <b>{count} ADET {b_name.upper()} SANDIĞI KAYDEDİLDİ</b>\n\n"
+                f"<blockquote>📅 <b>Bugünkü Toplam:</b> <code>{res['today_total']} adet</code>\n"
+                f"🏆 <b>Tüm Zamanlar:</b> <code>{res['all_time_total']} adet</code></blockquote>\n\n"
                 f"<i>Raporları görüntülemek için /rapor yazabilirsiniz.</i>"
             )
-            # Edit caption if photo message, or edit text if text message
-            self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=message_id, reply_markup=None)
+            post_kb = {"inline_keyboard": [
+                [
+                    {"text": "📊 Raporu Aç", "callback_data": "rep:0"},
+                    {"text": "❌ Kapat", "callback_data": "close_menu"}
+                ]
+            ]}
+            self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=message_id, reply_markup=post_kb)
             return
 
         # 6. Manual chest count prompted
@@ -415,17 +516,21 @@ class TelegramBotListener:
             b_name = BOSSES.get(boss_key, {}).get("name", boss_key)
             set_user_state(chat_id, "waiting_chest_count", {"boss_key": boss_key, "message_id": message_id})
             caption = (
-                f"✏️ <b>{b_name} Sandık Adedi Girişi</b>\n\n"
-                f"Lütfen kaç sandık düştüğünü sohbete rakam olarak yazın:\n"
-                f"<i>(Örn: <code>5</code> veya <code>12</code>)</i>\n\n"
-                f"İptal etmek için <code>/iptal</code> yazabilirsiniz."
+                f"✏️ <b>{b_name.upper()} SANDIK GİRİŞİ</b>\n\n"
+                f"<blockquote>Lütfen kaç sandık düştüğünü sohbete rakam olarak yazın:\n"
+                f"<i>Örn: <code>5</code> veya <code>12</code></i></blockquote>\n\n"
+                f"<i>İptal etmek için aşağıdaki butona basabilir veya /iptal yazabilirsiniz.</i>"
             )
-            self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=message_id, reply_markup=None)
+            cancel_kb = {"inline_keyboard": [[{"text": "❌ İptal Et", "callback_data": "cancel_state"}]]}
+            self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=message_id, reply_markup=cancel_kb)
             return
 
         # 7. No chest dropped
         if data == "nochest":
-            caption = "👌 <b>Sayaç çalışıyor.</b> Sandık eklenmedi."
+            caption = (
+                "👌 <b>SAYAÇ ÇALIŞIYOR</b>\n\n"
+                "<blockquote>Sandık kaydedilmedi. Soğuma süresi dolduğunda bildirim gönderilecektir.</blockquote>"
+            )
             self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=message_id, reply_markup=None)
             return
 
@@ -437,11 +542,17 @@ class TelegramBotListener:
             elif rep_type == "custom":
                 set_user_state(chat_id, "waiting_report_days", {"message_id": message_id})
                 msg = (
-                    "🔢 <b>ÖZEL GÜN SAYISI</b>\n\n"
-                    "Kaç günlük sandık raporu almak istiyorsunuz?\n"
-                    "Lütfen gün sayısını yazın (Örn: <code>3</code> veya <code>14</code>):"
+                    "🔢 <b>ÖZEL GÜN SAYISI GİRİŞİ</b>\n\n"
+                    "<blockquote>Kaç günlük sandık raporu almak istiyorsunuz?\n"
+                    "Lütfen gün sayısını sohbete yazın:\n"
+                    "<i>Örn: <code>3</code> veya <code>14</code></i></blockquote>\n\n"
+                    "<i>İptal etmek için aşağıdaki butona tıklayabilirsiniz.</i>"
                 )
-                self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=None)
+                cancel_kb = {"inline_keyboard": [
+                    [{"text": "⬅️ Rapor Menüsüne Dön", "callback_data": "rep:menu"}],
+                    [{"text": "❌ İptal Et", "callback_data": "cancel_state"}]
+                ]}
+                self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=cancel_kb)
             else:
                 try:
                     d = int(rep_type)
@@ -471,6 +582,73 @@ class TelegramBotListener:
                 self.show_calendar_view(chat_id, view_type="today", message_id=message_id)
             elif cal_action in ("today", "tomorrow", "week", "month"):
                 self.show_calendar_view(chat_id, view_type=cal_action, message_id=message_id)
+            return
+
+        # 11. Cancel boss cooldown timer
+        if data.startswith("canceltimer:"):
+            b_key = data.split(":", 1)[1]
+            b_name = BOSSES.get(b_key, {}).get("name", b_key)
+            cancelled = cancel_timer(chat_id, b_key)
+            if cancelled:
+                self.notifier.answer_callback_query(query_id, text=f"{b_name} sayacı iptal edildi!")
+            else:
+                self.notifier.answer_callback_query(query_id, text="Sayaç zaten bitmiş veya bulunamadı.")
+
+            timers = get_active_timers(chat_id)
+            if timers:
+                lines = ["⏳ <b>AKTİF BOSS SOĞUMA SÜRELERİ</b>\n"]
+                b_lines = []
+                buttons = []
+                for t in timers:
+                    boss_info = BOSSES.get(t["boss_key"], {})
+                    icon = boss_info.get("icon", "⚔️")
+                    b_lines.append(f"{icon} <b>{t['boss_name']}</b>\n   ⏳ Kalan: <code>{t['remaining_str']}</code> (Bitiş: {t['end_time_str']} TSİ)")
+                    buttons.append([{"text": f"🗑️ {t['boss_name']} Sayacını İptal Et", "callback_data": f"canceltimer:{t['boss_key']}"}])
+                buttons.append([
+                    {"text": "🔄 Yenile", "callback_data": "kalan:refresh"},
+                    {"text": "❌ Kapat", "callback_data": "close_menu"}
+                ])
+                lines.append(f"<blockquote>{chr(10).join(b_lines)}</blockquote>\n")
+                lines.append(f"🗑️ <i>{b_name} sayacı iptal edildi.</i>")
+                self.notifier.edit_message_text("\n".join(lines), chat_id=chat_id, message_id=message_id, reply_markup={"inline_keyboard": buttons})
+            else:
+                msg = (
+                    "⏳ <b>AKTİF BOSS SAYACI YOK</b>\n\n"
+                    f"<blockquote>🗑️ <b>{b_name}</b> sayacı başarıyla iptal edildi.\n"
+                    "Şu anda bekleyen başka bir boss sayacınız bulunmuyor.</blockquote>\n\n"
+                    "Yeni sayaç başlatmak için: <code>/bosscd</code>"
+                )
+                self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=None)
+            return
+
+        # 12. Refresh cooldown timers view
+        if data == "kalan:refresh":
+            timers = get_active_timers(chat_id)
+            if not timers:
+                msg = (
+                    "⏳ <b>AKTİF BOSS SAYACI YOK</b>\n\n"
+                    "<blockquote>Şu anda bekleyen bir boss sayacınız bulunmuyor.</blockquote>\n\n"
+                    "Yeni sayaç başlatmak için: <code>/bosscd</code>"
+                )
+                self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=None)
+                return
+
+            lines = ["⏳ <b>AKTİF BOSS SOĞUMA SÜRELERİ</b>\n"]
+            b_lines = []
+            buttons = []
+            for t in timers:
+                boss_info = BOSSES.get(t["boss_key"], {})
+                icon = boss_info.get("icon", "⚔️")
+                b_lines.append(f"{icon} <b>{t['boss_name']}</b>\n   ⏳ Kalan: <code>{t['remaining_str']}</code> (Bitiş: {t['end_time_str']} TSİ)")
+                buttons.append([{"text": f"🗑️ {t['boss_name']} Sayacını İptal Et", "callback_data": f"canceltimer:{t['boss_key']}"}])
+
+            buttons.append([
+                {"text": "🔄 Yenile", "callback_data": "kalan:refresh"},
+                {"text": "❌ Kapat", "callback_data": "close_menu"}
+            ])
+            lines.append(f"<blockquote>{chr(10).join(b_lines)}</blockquote>\n")
+            lines.append("<i>Süre dolduğunda bot size fotoğraflı bildirim gönderecektir.</i>")
+            self.notifier.edit_message_text("\n".join(lines), chat_id=chat_id, message_id=message_id, reply_markup={"inline_keyboard": buttons})
             return
 
     # =========================================================================
@@ -510,11 +688,12 @@ class TelegramBotListener:
             title = "⚔️ <b>BOSS SOĞUMA SÜRESİ BAŞLAT</b>"
             msg = f"{title}\n\n"
             if favorites:
-                msg += "⭐ <b>FAVORİ BOSSLARINIZ:</b> <i>(Tek tıkla sayacı başlatın)</i>\n\n"
-            msg += "📁 <b>TÜM KATEGORİLER:</b>\n<i>(Kategori seçip bossa tıklayarak sayacı başlatabilirsiniz)</i>"
+                msg += "<blockquote>⭐ <b>Favoriler:</b> Tek tıkla sayacı başlatın\n📁 <b>Kategoriler:</b> Listeden boss seçin</blockquote>"
+            else:
+                msg += "<blockquote>📁 Kestiğiniz bossun kategorisini seçin:</blockquote>"
         else:
             title = "📦 <b>SANDIK EKLEME MENÜSÜ</b>"
-            msg = f"{title}\n\nKategoriyi seçin:"
+            msg = f"{title}\n\n<blockquote>Sandık eklemek istediğiniz bossun kategorisini seçin:</blockquote>"
 
         self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
 
@@ -544,9 +723,9 @@ class TelegramBotListener:
         keyboard = {"inline_keyboard": buttons}
         msg = (
             "⭐ <b>FAVORİ BOSSLARI DÜZENLE</b>\n\n"
-            "Sık kestiğiniz bossları favorilere ekleyin. Favori bosslarınız <code>/bosscd</code> "
-            "menüsünün en üstünde tek tıkla başlatma butonu olarak listelenir.\n\n"
-            "<i>(Eklemek veya çıkarmak için boss butonuna tıklayın)</i>"
+            "<blockquote>Sık kestiğiniz bossları favorilere ekleyin.\n"
+            "Favori bosslarınız <code>/bosscd</code> menüsünün en üstünde tek tıkla başlatma butonu olarak listelenir.</blockquote>\n\n"
+            "<i>(Listeye eklemek veya çıkarmak için butona dokunun)</i>"
         )
         if message_id:
             self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
@@ -567,8 +746,8 @@ class TelegramBotListener:
                 if res.get("success"):
                     self.notifier.send_message(
                         f"✅ <b>Etkinlik takvimi güncellendi!</b>\n\n"
-                        f"📌 <b>Başlık:</b> {res['title']}\n"
-                        f"🔢 <b>Toplam Etkinlik:</b> {res['count']} adet",
+                        f"<blockquote>📌 <b>Başlık:</b> {res['title']}\n"
+                        f"🔢 <b>Toplam Etkinlik:</b> <code>{res['count']} adet</code></blockquote>",
                         target_chat_id=chat_id
                     )
                 else:
@@ -583,8 +762,8 @@ class TelegramBotListener:
                 if res.get("success"):
                     self.notifier.send_message(
                         f"✅ <b>Özel takvim linki yüklendi!</b>\n\n"
-                        f"📌 <b>Başlık:</b> {res['title']}\n"
-                        f"🔢 <b>Toplam Etkinlik:</b> {res['count']} adet",
+                        f"<blockquote>📌 <b>Başlık:</b> {res['title']}\n"
+                        f"🔢 <b>Toplam Etkinlik:</b> <code>{res['count']} adet</code></blockquote>",
                         target_chat_id=chat_id
                     )
                 else:
@@ -597,7 +776,7 @@ class TelegramBotListener:
         self.show_calendar_view(chat_id, view_type="today")
 
     def show_calendar_view(self, chat_id: str, view_type: str = "today", message_id: int = None):
-        """Render event calendar in specified view mode."""
+        """Render event calendar in specified view mode with elite card formatting."""
         meta = get_latest_calendar_meta()
         if not meta:
             sync_res = sync_event_calendar()
@@ -607,7 +786,7 @@ class TelegramBotListener:
         if not meta:
             msg = (
                 "📅 <b>MARMARA & BAGJANAMU ETKİNLİK TAKVİMİ</b>\n\n"
-                "ℹ️ <i>Bu ay için forumda henüz bir etkinlik takvimi konusu bulunamadı veya yayınlanmadı.</i>\n\n"
+                "<blockquote>ℹ️ <i>Bu ay için forumda henüz bir etkinlik takvimi konusu bulunamadı veya yayınlanmadı.</i></blockquote>\n\n"
                 "Yeniden kontrol etmek için: <code>/takvim yenile</code>"
             )
             if message_id:
@@ -616,11 +795,10 @@ class TelegramBotListener:
                 self.notifier.send_message(msg, target_chat_id=chat_id)
             return
 
+        title_str = meta.get('thread_title', 'Marmara & Bagjanamu Etkinlik Takvimi')
         lines = [
-            "📅 ━━━━━━━━━━━━━━━━━━━━ 📅",
-            f"🏆 <b>{meta.get('thread_title', 'MARMARA & BAGJANAMU ETKİNLİK TAKVİMİ').upper()}</b>",
-            "📅 ━━━━━━━━━━━━━━━━━━━━ 📅",
-            ""
+            "📅 <b>MARMARA & BAGJANAMU ETKİNLİK TAKVİMİ</b>\n",
+            f"<blockquote>📌 <b>Kaynak:</b> <i>{self.notifier.escape_html(title_str)}</i></blockquote>\n"
         ]
 
         if view_type == "today":
@@ -629,81 +807,94 @@ class TelegramBotListener:
 
             if today_events:
                 d_name = today_events[0].get("display_date", "Bugün")
-                lines.append(f"🌟 <b>BUGÜNÜN ETKİNLİKLERİ ({d_name})</b>\n")
+                ev_lines = []
                 for ev in today_events:
                     name = ev.get("event_name", "")
                     tsi = ev.get("tsi_time", "")
                     cet = ev.get("cet_time", "")
                     icon = "🔔" if is_tracked_event(name) else "▫️"
-                    lines.append(f"• ⏰ <b>{tsi} TSİ:</b> {icon} <b>{name}</b> <i>(Avrupa: {cet})</i>")
-                lines.append("")
+                    ev_lines.append(f"• ⏰ <code>{tsi} TSİ</code> {icon} <b>{name}</b>")
+                lines.append(f"🌟 <b>BUGÜNÜN ETKİNLİKLERİ ({d_name}):</b>")
+                lines.append(f"<blockquote>{chr(10).join(ev_lines)}</blockquote>\n")
             else:
-                lines.append("🌟 <b>BUGÜN:</b> <i>Bugün için takvimde planlanmış özel bir drop etkinliği yok.</i>\n")
+                lines.append("🌟 <b>BUGÜNÜN ETKİNLİKLERİ:</b>\n<blockquote><i>Bugün için planlanmış drop etkinliği yok.</i></blockquote>\n")
 
             if tomorrow_events:
                 d_name = tomorrow_events[0].get("display_date", "Yarın")
-                lines.append(f"➡️ <b>YARININ ETKİNLİKLERİ ({d_name})</b>\n")
+                ev_lines = []
                 for ev in tomorrow_events:
                     name = ev.get("event_name", "")
                     tsi = ev.get("tsi_time", "")
                     icon = "🔔" if is_tracked_event(name) else "▫️"
-                    lines.append(f"• ⏰ <b>{tsi} TSİ:</b> {icon} <b>{name}</b>")
-                lines.append("")
+                    ev_lines.append(f"• ⏰ <code>{tsi} TSİ</code> {icon} <b>{name}</b>")
+                lines.append(f"➡️ <b>YARININ ETKİNLİKLERİ ({d_name}):</b>")
+                lines.append(f"<blockquote>{chr(10).join(ev_lines)}</blockquote>\n")
 
         elif view_type == "tomorrow":
             tomorrow_events = get_tomorrow_events()
             if tomorrow_events:
                 d_name = tomorrow_events[0].get("display_date", "Yarın")
-                lines.append(f"➡️ <b>YARININ ETKİNLİKLERİ ({d_name})</b>\n")
+                ev_lines = []
                 for ev in tomorrow_events:
                     name = ev.get("event_name", "")
                     tsi = ev.get("tsi_time", "")
-                    cet = ev.get("cet_time", "")
                     icon = "🔔" if is_tracked_event(name) else "▫️"
-                    lines.append(f"• ⏰ <b>{tsi} TSİ:</b> {icon} <b>{name}</b> <i>(Avrupa: {cet})</i>")
-                lines.append("")
+                    ev_lines.append(f"• ⏰ <code>{tsi} TSİ</code> {icon} <b>{name}</b>")
+                lines.append(f"➡️ <b>YARININ ETKİNLİKLERİ ({d_name}):</b>")
+                lines.append(f"<blockquote>{chr(10).join(ev_lines)}</blockquote>\n")
             else:
-                lines.append("➡️ <b>YARIN:</b> <i>Yarın için planlanmış etkinlik bulunmuyor.</i>\n")
+                lines.append("➡️ <b>YARININ ETKİNLİKLERİ:</b>\n<blockquote><i>Yarın için planlanmış etkinlik bulunmuyor.</i></blockquote>\n")
 
         elif view_type == "week":
             week_events = get_upcoming_events(7)
-            lines.append("🗓️ <b>ÖNÜMÜZDEKİ 7 GÜNÜN ETKİNLİKLERİ</b>\n")
+            lines.append("🗓️ <b>ÖNÜMÜZDEKİ 7 GÜNÜN ETKİNLİKLERİ:</b>\n")
             if week_events:
                 current_d = None
+                day_lines = []
                 for ev in week_events:
                     d_str = ev.get("display_date", ev.get("event_date", ""))
                     if d_str != current_d:
+                        if day_lines:
+                            lines.append(f"<blockquote>{chr(10).join(day_lines)}</blockquote>\n")
+                            day_lines = []
                         current_d = d_str
                         lines.append(f"📅 <b>{current_d}:</b>")
                     name = ev.get("event_name", "")
                     tsi = ev.get("tsi_time", "")
                     icon = "🔔" if is_tracked_event(name) else "▫️"
-                    lines.append(f"  • ⏰ {tsi} TSİ: {icon} <b>{name}</b>")
-                lines.append("")
+                    day_lines.append(f"• ⏰ <code>{tsi} TSİ</code> {icon} <b>{name}</b>")
+                if day_lines:
+                    lines.append(f"<blockquote>{chr(10).join(day_lines)}</blockquote>\n")
             else:
-                lines.append("<i>Yaklaşan etkinlik bulunamadı.</i>\n")
+                lines.append("<blockquote><i>Yaklaşan etkinlik bulunamadı.</i></blockquote>\n")
 
         elif view_type == "month":
             month_events = get_month_events()
-            lines.append("📋 <b>AYLIK TÜM ETKİNLİKLER</b>\n")
+            lines.append("📋 <b>AYLIK TÜM ETKİNLİKLER:</b>\n")
             if month_events:
                 current_d = None
+                day_lines = []
                 for ev in month_events:
                     d_str = ev.get("display_date", ev.get("event_date", ""))
                     if d_str != current_d:
+                        if day_lines:
+                            lines.append(f"<blockquote>{chr(10).join(day_lines)}</blockquote>\n")
+                            day_lines = []
                         current_d = d_str
                         lines.append(f"📅 <b>{current_d}:</b>")
                     name = ev.get("event_name", "")
                     tsi = ev.get("tsi_time", "")
                     icon = "🔔" if is_tracked_event(name) else "▫️"
-                    lines.append(f"  • ⏰ {tsi}: {icon} <b>{name}</b>")
-                lines.append("")
+                    day_lines.append(f"• ⏰ <code>{tsi} TSİ</code> {icon} <b>{name}</b>")
+                if day_lines:
+                    lines.append(f"<blockquote>{chr(10).join(day_lines)}</blockquote>\n")
             else:
-                lines.append("<i>Bu ay için kayıtlı etkinlik yok.</i>\n")
+                lines.append("<blockquote><i>Bu ay için kayıtlı etkinlik yok.</i></blockquote>\n")
 
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append("<i>ℹ️ 🔔 Simgeli etkinlikler başladığında bot otomatik bildirim gönderir.</i>\n")
-        lines.append(f"🔗 <a href=\"{meta.get('thread_url', '')}\">Resmi Forum Takvim Konusu</a>")
+        lines.append(
+            "<blockquote>🔔 <b>Otomatik Alarm:</b> Simgeli etkinlikler başladığında bot bildirim gönderir.</blockquote>\n"
+            f"🔗 <a href=\"{meta.get('thread_url', '')}\"><b>Resmi Forum Takvim Konusu</b></a>"
+        )
 
         buttons = [
             [
@@ -715,7 +906,8 @@ class TelegramBotListener:
                 {"text": "📋 Tüm Ay", "callback_data": "cal:month"},
             ],
             [
-                {"text": "🔄 Takvimi Yenile", "callback_data": "cal:refresh"},
+                {"text": "🔄 Yenile", "callback_data": "cal:refresh"},
+                {"text": "❌ Kapat", "callback_data": "close_menu"},
             ]
         ]
         keyboard = {"inline_keyboard": buttons}
@@ -749,10 +941,18 @@ class TelegramBotListener:
             buttons.append(row)
 
         back_cb = "cat:back" if mode == "cd" else "chestcat:back"
-        buttons.append([{"text": "⬅️ Kategorilere Dön", "callback_data": back_cb}])
+        buttons.append([
+            {"text": "⬅️ Kategorilere Dön", "callback_data": back_cb},
+            {"text": "❌ Kapat", "callback_data": "close_menu"}
+        ])
 
         keyboard = {"inline_keyboard": buttons}
-        msg = f"<b>{cat_data['title']}</b>\n\nBoss seçiniz:"
+        mode_title = "Soğuma Sayacı Başlat" if mode == "cd" else "Sandık Ekle"
+        msg = (
+            f"📁 <b>{cat_data['title'].upper()}</b>\n\n"
+            f"<blockquote>🎯 <b>İşlem:</b> <code>{mode_title}</code>\n"
+            f"Lütfen listeden bir boss seçiniz:</blockquote>"
+        )
         self.notifier.edit_message_text(msg, chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
 
     def start_boss_cd(self, chat_id: str, message_id: int, boss_key: str):
@@ -780,12 +980,10 @@ class TelegramBotListener:
         keyboard = {"inline_keyboard": chest_buttons}
 
         caption = (
-            f"⏳ <b>{icon} {b_name.upper()} SAYAÇ BAŞLATILDI!</b>\n\n"
-            f"⏱️ <b>Soğuma Süresi:</b> <code>{display_cd}</code>\n"
-            f"🔔 <b>Hazır Olacağı Saat:</b> <code>{res['end_time_str']} (TSİ)</code>\n\n"
-            f"<i>Süre bittiğinde buradan bildirim alacaksınız.</i>\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 <b>Düşen sandık sayısını seçin:</b>"
+            f"⏳ <b>{icon} {b_name.upper()} SAYAÇ BAŞLATILDI</b>\n\n"
+            f"<blockquote>⏱️ <b>Soğuma Süresi:</b> <code>{display_cd}</code>\n"
+            f"🔔 <b>Hazır Olacağı Saat:</b> <code>{res['end_time_str']} (TSİ)</code></blockquote>\n\n"
+            f"📦 <i>Düşen sandık sayısını aşağıdaki butonlardan seçin:</i>"
         )
 
         # If started from menu, update previous message to remove old buttons
@@ -814,10 +1012,14 @@ class TelegramBotListener:
             ],
             [
                 {"text": "⬅️ Geri Dön", "callback_data": "chestcat:back"},
+                {"text": "❌ Kapat", "callback_data": "close_menu"},
             ]
         ]
         keyboard = {"inline_keyboard": chest_buttons}
-        caption = f"{icon} <b>{b_name} Sandığı</b>\n\nKaç adet düştüğünü seçin:"
+        caption = (
+            f"{icon} <b>{b_name.upper()} SANDIĞI</b>\n\n"
+            f"<blockquote>Kaç adet sandık düştüğünü seçiniz:</blockquote>"
+        )
         if message_id:
             self.notifier.edit_message_text(
                 f"📦 <b>{b_name}</b> seçildi. Aşağıdaki karttan düşen sandık adedini belirleyin:",
@@ -837,6 +1039,7 @@ class TelegramBotListener:
         b_info = BOSSES.get(boss_key, {})
         b_name = b_info.get("name", boss_key)
         img_url = get_boss_image(boss_key)
+        orig_msg_id = data.get("message_id")
 
         try:
             count = int(text.strip())
@@ -849,12 +1052,25 @@ class TelegramBotListener:
         clear_user_state(chat_id)
         res = add_chest_drop(chat_id, boss_key, b_name, count)
         caption = (
-            f"✅ <b>{count} adet {b_name} Sandığı</b> kaydedildi!\n\n"
-            f"📅 <b>Bugünkü Toplam:</b> {res['today_total']} adet\n"
-            f"🏆 <b>Tüm Zamanlar:</b> {res['all_time_total']} adet\n\n"
+            f"✅ <b>{count} ADET {b_name.upper()} SANDIĞI KAYDEDİLDİ</b>\n\n"
+            f"<blockquote>📅 <b>Bugünkü Toplam:</b> <code>{res['today_total']} adet</code>\n"
+            f"🏆 <b>Tüm Zamanlar:</b> <code>{res['all_time_total']} adet</code></blockquote>\n\n"
             f"<i>Raporları görüntülemek için /rapor yazabilirsiniz.</i>"
         )
-        self.notifier.send_photo(photo_url=img_url, caption=caption, target_chat_id=chat_id)
+        post_kb = {"inline_keyboard": [
+            [
+                {"text": "📊 Raporu Aç", "callback_data": "rep:0"},
+                {"text": "❌ Kapat", "callback_data": "close_menu"}
+            ]
+        ]}
+
+        # If there's an active prompt photo message, update its caption so images aren't duplicated!
+        if orig_msg_id:
+            updated = self.notifier.edit_message_caption(caption, chat_id=chat_id, message_id=orig_msg_id, reply_markup=post_kb)
+            if not updated:
+                self.notifier.send_photo(photo_url=img_url, caption=caption, reply_markup=post_kb, target_chat_id=chat_id)
+        else:
+            self.notifier.send_photo(photo_url=img_url, caption=caption, reply_markup=post_kb, target_chat_id=chat_id)
 
     def handle_state_report_days(self, chat_id: str, text: str):
         try:

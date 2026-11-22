@@ -68,7 +68,7 @@ Bu bot, [Metin2 Türkiye Resmi Forumu](https://board.tr.metin2.gameforge.com/)'n
 | `/sandik` | Sandık ekleme menüsünü açar (veya `/sandik nemere 2`). |
 | `/rapor` | Sandık raporu menüsünü açar (veya `/rapor 7`, `/rapor tum`). |
 | `/yardim` | Tüm komutları ve kullanım rehberini listeler. |
-| `/iptal` | Bekleyen sayı yazma işlemini iptal eder. |
+| `/iptal` | Bekleyen sayı girişini iptal eder veya aktif boss sayacını sonlandırma menüsü sunar. |
 
 ---
 

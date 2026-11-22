@@ -1,0 +1,16 @@
+# Gizli anahtarlar ve tokenlar (Gite girmemeli)
+.env
+
+# Botun çalışma durumu ve loglar
+data/
+*.log
+
+# Python önbellek dosyaları
+__pycache__/
+*.py[cod]
+
+# Editör dosyaları
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

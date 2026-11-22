@@ -1,0 +1,11 @@
+services:
+  metin2-bot:
+    build: .
+    container_name: metin2_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Europe/Istanbul
+    volumes:
+      - ./data:/app/data

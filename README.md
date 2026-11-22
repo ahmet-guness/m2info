@@ -32,9 +32,13 @@ Bu bot, [Metin2 Türkiye Resmi Forumu](https://board.tr.metin2.gameforge.com/)'n
     8. **Envanter Genişletme**
 - Dilediğinizde `/takvim yenile` ile anında foruma bağlanıp en güncel takvimi çekebilir, gerekirse `/takvim link <url>` ile özel konu linki tanımlayabilirsiniz.
 
-### 3. 📦 Düşen Sandıkları Kaydetme & Raporlama
+### 3. 📦 Düşen Sandıkları Kaydetme, Düzeltme & Raporlama
 - Boss kesildikten sonra sayaç başlarken tek dokunuşla sandık ekleyebilirsiniz (`[+1]`, `[+2]`, `[+3]`, `[Sayı Yaz]`).
-- İstediğiniz zaman `/sandik nemere 3` gibi kısayolla da sandık ekleyebilirsiniz.
+- ↩️ **Yanlış Yazımı Tek Tıkla Geri Alma:** Sandık eklendiği an kartın altında **`[ ↩️ Geri Al (-X) ]`** butonu belirir. Yanlışlıkla tıklandığında anında silinebilir.
+- ➖ **Sandık Sayısı Düşürme & Silme:**
+  - Komutla eksi sayı yazarak: `/sandik nemere -2`
+  - Doğrudan silme komutuyla: `/sandiksil nemere 2` veya `/sandiksil` (menüden seçerek)
+  - Son eklemeyi geri alma: `/gerial`
 - `/rapor` komutu ile:
   - 📅 **Bugün** düşen sandıklar
   - 🗓️ **Bu Hafta (Son 7 Gün)** düşen sandıklar
@@ -43,7 +47,7 @@ Bu bot, [Metin2 Türkiye Resmi Forumu](https://board.tr.metin2.gameforge.com/)'n
   - 🔢 **Özel Gün Sayısı** (Örn: `/rapor 3` yazarak son 3 günün raporu)  
   anında boss bazında sıralı döküm olarak listelenir.
 
-### 3. 🔥 Mutlu Saatler (Happy Hour) Takibi
+### 4. 🔥 Mutlu Saatler (Happy Hour) Takibi
 - Forumda yeni Happy Hour açıldığında başlangıç, bitiş ve bonus oranını bildirir.
 - Happy Hour süresi dolduğunda otomatik olarak *"MUTLU SAATLER SONA ERDİ!"* uyarısı gönderir.
 
@@ -65,7 +69,9 @@ Bu bot, [Metin2 Türkiye Resmi Forumu](https://board.tr.metin2.gameforge.com/)'n
 | `/favori` | Sık kestiğiniz bossları favorilere ekleme/çıkarma menüsünü açar. |
 | `/takvim` | Marmara & Bagjanamu günün ve haftanın etkinlik takvimini gösterir. |
 | `/kalan` | Aktif tüm boss sayaçlarını ve kalan süreleri gösterir. |
-| `/sandik` | Sandık ekleme menüsünü açar (veya `/sandik nemere 2`). |
+| `/sandik` | Sandık ekleme menüsünü açar (veya `/sandik nemere 2`, `/sandik nemere -1`). |
+| `/sandiksil` | Yanlış girilen sandık sayısını düşürür (veya `/sandiksil nemere 2`). |
+| `/gerial` | En son eklenen sandık girdisini anında geri alır / siler. |
 | `/rapor` | Sandık raporu menüsünü açar (veya `/rapor 7`, `/rapor tum`). |
 | `/yardim` | Tüm komutları ve kullanım rehberini listeler. |
 | `/iptal` | Bekleyen sayı girişini iptal eder veya aktif boss sayacını sonlandırma menüsü sunar. |

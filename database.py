@@ -241,10 +241,11 @@ def add_chest_drop(chat_id: str, boss_key: str, boss_name: str, count: int = 1) 
     conn = get_connection()
     try:
         with conn:
-            conn.execute("""
+            cursor = conn.execute("""
                 INSERT INTO chest_drops (chat_id, boss_key, boss_name, chest_count)
                 VALUES (?, ?, ?, ?);
             """, (str(chat_id), boss_key, boss_name, count))
+            last_id = cursor.lastrowid
 
         # Return total chests for this boss today and all time
         today_row = conn.execute("""
@@ -260,11 +261,149 @@ def add_chest_drop(chat_id: str, boss_key: str, boss_name: str, count: int = 1) 
         """, (str(chat_id), boss_key)).fetchone()
 
         return {
+            "last_id": last_id,
             "boss_name": boss_name,
+            "boss_key": boss_key,
             "added": count,
-            "today_total": today_row["total"] or count,
-            "all_time_total": all_row["total"] or count,
+            "today_total": max(0, today_row["total"] or 0),
+            "all_time_total": max(0, all_row["total"] or 0),
         }
+    finally:
+        conn.close()
+
+
+def remove_chest_drop(chat_id: str, boss_key: str, boss_name: str, count: int = 1) -> dict:
+    """
+    Reduce / subtract dropped chests for a boss.
+    Ensures total chests for the boss never drop below 0.
+    """
+    count = max(1, int(count))
+    conn = get_connection()
+    try:
+        all_row = conn.execute("""
+            SELECT SUM(chest_count) as total
+            FROM chest_drops
+            WHERE chat_id = ? AND boss_key = ?;
+        """, (str(chat_id), boss_key)).fetchone()
+
+        current_total = all_row["total"] or 0
+        if current_total <= 0:
+            return {
+                "success": False,
+                "error": f"Kayıtlı {boss_name} sandığınız bulunmuyor (Mevcut: 0).",
+                "removed": 0,
+                "today_total": 0,
+                "all_time_total": 0
+            }
+
+        actual_remove = min(count, current_total)
+        with conn:
+            cursor = conn.execute("""
+                INSERT INTO chest_drops (chat_id, boss_key, boss_name, chest_count)
+                VALUES (?, ?, ?, ?);
+            """, (str(chat_id), boss_key, boss_name, -actual_remove))
+            last_id = cursor.lastrowid
+
+        today_row = conn.execute("""
+            SELECT SUM(chest_count) as total
+            FROM chest_drops
+            WHERE chat_id = ? AND boss_key = ? AND date(created_at, 'localtime') = date('now', 'localtime');
+        """, (str(chat_id), boss_key)).fetchone()
+
+        all_row = conn.execute("""
+            SELECT SUM(chest_count) as total
+            FROM chest_drops
+            WHERE chat_id = ? AND boss_key = ?;
+        """, (str(chat_id), boss_key)).fetchone()
+
+        return {
+            "success": True,
+            "last_id": last_id,
+            "boss_name": boss_name,
+            "boss_key": boss_key,
+            "removed": actual_remove,
+            "today_total": max(0, today_row["total"] or 0),
+            "all_time_total": max(0, all_row["total"] or 0),
+        }
+    finally:
+        conn.close()
+
+
+def undo_chest_drop(chat_id: str, record_id: int = None, boss_key: str = None) -> dict:
+    """
+    Undo a specific chest drop entry by id, or the latest chest drop for a boss / chat.
+    """
+    conn = get_connection()
+    try:
+        if record_id:
+            row = conn.execute("""
+                SELECT id, boss_key, boss_name, chest_count
+                FROM chest_drops
+                WHERE id = ? AND chat_id = ?;
+            """, (record_id, str(chat_id))).fetchone()
+        elif boss_key:
+            row = conn.execute("""
+                SELECT id, boss_key, boss_name, chest_count
+                FROM chest_drops
+                WHERE chat_id = ? AND boss_key = ?
+                ORDER BY id DESC LIMIT 1;
+            """, (str(chat_id), boss_key)).fetchone()
+        else:
+            row = conn.execute("""
+                SELECT id, boss_key, boss_name, chest_count
+                FROM chest_drops
+                WHERE chat_id = ?
+                ORDER BY id DESC LIMIT 1;
+            """, (str(chat_id),)).fetchone()
+
+        if not row:
+            return {"success": False, "error": "Geri alınacak bir sandık kaydı bulunamadı."}
+
+        target_id = row["id"]
+        b_key = row["boss_key"]
+        b_name = row["boss_name"]
+        c_count = row["chest_count"]
+
+        with conn:
+            conn.execute("DELETE FROM chest_drops WHERE id = ?;", (target_id,))
+
+        today_row = conn.execute("""
+            SELECT SUM(chest_count) as total
+            FROM chest_drops
+            WHERE chat_id = ? AND boss_key = ? AND date(created_at, 'localtime') = date('now', 'localtime');
+        """, (str(chat_id), b_key)).fetchone()
+
+        all_row = conn.execute("""
+            SELECT SUM(chest_count) as total
+            FROM chest_drops
+            WHERE chat_id = ? AND boss_key = ?;
+        """, (str(chat_id), b_key)).fetchone()
+
+        return {
+            "success": True,
+            "boss_name": b_name,
+            "boss_key": b_key,
+            "undone_count": c_count,
+            "today_total": max(0, today_row["total"] or 0) if today_row else 0,
+            "all_time_total": max(0, all_row["total"] or 0) if all_row else 0,
+        }
+    finally:
+        conn.close()
+
+
+def get_user_recorded_bosses(chat_id: str) -> list:
+    """Get list of bosses that the user currently has >0 chests recorded for."""
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT boss_key, boss_name, SUM(chest_count) as total
+            FROM chest_drops
+            WHERE chat_id = ?
+            GROUP BY boss_key, boss_name
+            HAVING total > 0
+            ORDER BY total DESC;
+        """, (str(chat_id),)).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 
@@ -299,7 +438,7 @@ def get_chest_report(chat_id: str, days: int = None) -> dict:
             WHERE chat_id = ? {date_filter};
         """
         total_row = conn.execute(total_query, params).fetchone()
-        grand_total = total_row["total"] or 0
+        grand_total = max(0, total_row["total"] or 0)
 
         # 2. Breakdown per boss
         breakdown_query = f"""
@@ -307,6 +446,7 @@ def get_chest_report(chat_id: str, days: int = None) -> dict:
             FROM chest_drops
             WHERE chat_id = ? {date_filter}
             GROUP BY boss_name
+            HAVING boss_total > 0
             ORDER BY boss_total DESC;
         """
         rows = conn.execute(breakdown_query, params).fetchall()

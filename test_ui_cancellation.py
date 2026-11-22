@@ -135,7 +135,7 @@ def run_tests():
     # Verify caption of existing photo was edited rather than sending a new photo
     assert len(mock_notifier.sent_photos) == initial_photo_count
     assert "8 ADET NEMERE SANDIĞI KAYDEDİLDİ" in mock_notifier.edited_captions[-1]["caption"]
-    assert "Bugünkü Toplam" in mock_notifier.edited_captions[-1]["caption"]
+    assert "Bugün" in mock_notifier.edited_captions[-1]["caption"]
     print("  ✓ Sayı girildiğinde mevcut fotoğraf kartının başlığı güncellendi (çift fotoğraf atılmadı).")
 
     print("\n--- TEST 4: Boss Cooldown Cancellation via Button ---")

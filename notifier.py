@@ -216,28 +216,23 @@ class TelegramNotifier:
 
         desc_snippet = ""
         if desc:
-            if len(desc) > 380:
-                desc_snippet = self.escape_html(desc[:380].strip()) + "..."
+            if len(desc) > 300:
+                desc_snippet = self.escape_html(desc[:300].strip()) + "..."
             else:
                 desc_snippet = self.escape_html(desc)
 
         message = (
-            "🔥 <b>METİN2</b> • <i>YENİ MUTLU SAATLER!</i>\n\n"
-            f"<blockquote>🎁 <b>Bonus Oranı:</b> <code>{bonus}</code>\n"
+            f"🔥 <b>MUTLU SAATLER BAŞLADI</b> · <code>{bonus} BONUS</code>\n\n"
+            f"<blockquote>💎 <b>Avantaj  :</b> <code>{bonus} Ekstra EP</code>\n"
             f"⏳ <b>Başlangıç:</b> <code>{start_str}</code>\n"
-            f"⌛ <b>Bitiş Tarihi:</b> <code>{end_str}</code></blockquote>\n"
+            f"⌛ <b>Bitiş    :</b> <code>{end_str}</code>\n"
+            f"📢 <b>Duyuru  :</b> <b>{title}</b></blockquote>\n"
         )
-
-        if pub_date:
-            message += f"📅 <i>Duyuru: {pub_date}</i>\n"
 
         if desc_snippet:
-            message += f"\n📝 <i>\"{desc_snippet}\"</i>\n"
+            message += f"<blockquote>📝 <i>\"{desc_snippet}\"</i></blockquote>\n\n"
 
-        message += (
-            "\n⚠️ <i>Market ekranında bonusun aktif olduğunu kontrol ediniz.</i>\n"
-            f"🔗 <a href=\"{link}\"><b>Forum Konusunu Görüntüle</b></a>"
-        )
+        message += f"🔗 <a href=\"{link}\"><b>Resmi Forum Duyurusunu Aç ↗</b></a>"
 
         res = self.send_message(message, parse_mode="HTML", disable_preview=False)
         return bool(res)
@@ -254,9 +249,9 @@ class TelegramNotifier:
         message = (
             "🛑 <b>MUTLU SAATLER SONA ERDİ</b>\n\n"
             f"<blockquote>📌 <b>Kampanya:</b> <b>{header_title}</b>\n"
-            f"⌛ <b>Bitiş Zamanı:</b> <code>{end_str}</code></blockquote>\n\n"
-            "ℹ️ <i>Mutlu Saatler bonus süresi dolmuştur. Artık standart oranlar geçerlidir.</i>\n"
-            f"🔗 <a href=\"{link}\"><b>İlgili Forum Konusu</b></a>"
+            f"⌛ <b>Bitiş Zamanı:</b> <code>{end_str}</code>\n"
+            f"ℹ️ <b>Durum      :</b> <code>Standart EP Oranları Aktif</code></blockquote>\n\n"
+            f"🔗 <a href=\"{link}\"><b>İlgili Forum Konusu ↗</b></a>"
         )
 
         res = self.send_message(message, parse_mode="HTML", disable_preview=False)
@@ -271,23 +266,23 @@ class TelegramNotifier:
 
         desc_snippet = ""
         if desc:
-            if len(desc) > 400:
-                desc_snippet = self.escape_html(desc[:400].strip()) + "..."
+            if len(desc) > 300:
+                desc_snippet = self.escape_html(desc[:300].strip()) + "..."
             else:
                 desc_snippet = self.escape_html(desc)
 
         message = (
-            "⚙️ <b>METİN2</b> • <i>BAKIM DUYURUSU</i>\n\n"
-            f"<blockquote>📌 <b>Başlık:</b> <b>{title}</b>\n"
-            f"📅 <b>Duyuru:</b> <code>{pub_date or 'Belirtilmedi'}</code></blockquote>\n"
+            "⚙️ <b>SUNUCU BAKIM DUYURUSU</b>\n\n"
+            f"<blockquote>📅 <b>Duyuru Tarihi :</b> <code>{pub_date or 'Belirtilmedi'}</code>\n"
+            f"📝 <b>Bakım Konusu   :</b> <b>{title}</b></blockquote>\n"
         )
 
         if desc_snippet:
-            message += f"\n📝 <i>\"{desc_snippet}\"</i>\n"
+            message += f"<blockquote>📝 <i>\"{desc_snippet}\"</i></blockquote>\n\n"
 
         message += (
-            "\nℹ️ <i>Bakım süresince sunuculara erişim durdurulabilir. G-Status canlı durumu izlemektedir.</i>\n"
-            f"🔗 <a href=\"{link}\"><b>Bakım Konusunu Görüntüle</b></a>"
+            "ℹ️ <i>G-Status canlı sunucu durumunu 7/24 izlemektedir.</i>\n"
+            f"🔗 <a href=\"{link}\"><b>Bakım Detaylarını Oku ↗</b></a>"
         )
 
         res = self.send_message(message, parse_mode="HTML", disable_preview=False)
@@ -302,26 +297,23 @@ class TelegramNotifier:
 
         desc_snippet = ""
         if desc:
-            if len(desc) > 400:
-                desc_snippet = self.escape_html(desc[:400].strip()) + "..."
+            if len(desc) > 300:
+                desc_snippet = self.escape_html(desc[:300].strip()) + "..."
             else:
                 desc_snippet = self.escape_html(desc)
 
         server_upper = server_name.upper()
 
         message = (
-            f"📢 <b>METİN2</b> • <i>{server_upper} DUYURUSU</i>\n\n"
-            f"<blockquote>📌 <b>Başlık:</b> <b>{title}</b>\n"
-            f"📅 <b>Duyuru:</b> <code>{pub_date or 'Belirtilmedi'}</code></blockquote>\n"
+            f"📢 <b>{server_upper} ÖZEL HABER</b>\n\n"
+            f"<blockquote>📅 <b>Tarih :</b> <code>{pub_date or 'Belirtilmedi'}</code>\n"
+            f"📌 <b>Başlık:</b> <b>{title}</b></blockquote>\n"
         )
 
         if desc_snippet:
-            message += f"\n📝 <i>\"{desc_snippet}\"</i>\n"
+            message += f"<blockquote>📝 <i>\"{desc_snippet}\"</i></blockquote>\n\n"
 
-        message += (
-            f"\n🛡️ <i>Bu duyuru <b>{server_name}</b> sunucusuna özeldir.</i>\n"
-            f"🔗 <a href=\"{link}\"><b>Sunucu Konusunu Görüntüle</b></a>"
-        )
+        message += f"🔗 <a href=\"{link}\"><b>Duyuru Detaylarını Gör ↗</b></a>"
 
         res = self.send_message(message, parse_mode="HTML", disable_preview=False)
         return bool(res)
@@ -335,12 +327,12 @@ class TelegramNotifier:
         total_count = info.get("total_count", 0)
 
         message = (
-            f"🔴 <b>SUNUCU KAPANDI</b> • <i>{server_upper}</i>\n\n"
-            f"<blockquote>⚠️ <b>Durum:</b> <code>OFFLINE (Çevrimdışı / Kapalı)</code>\n"
-            f"📊 <b>Kanal Durumu:</b> <code>{online_count}/{total_count} Açık</code>\n"
-            f"🕒 <b>Zaman:</b> <code>{now_str}</code></blockquote>\n\n"
-            "⚠️ <i>Sunucu bakıma girdi veya bağlantı kesildi. Tekrar açıldığında anında bildirim gönderilecektir.</i>\n"
-            "🌐 <a href=\"https://www.g-status.com/en-gb/game/metin2\"><b>Canlı G-Status Sayfası</b></a>"
+            f"🔴 <b>SUNUCU KAPANDI</b> · <i>{server_upper}</i>\n\n"
+            f"<blockquote>⚠️ <b>Bağlantı :</b> <code>OFFLINE (Çevrimdışı)</code>\n"
+            f"📊 <b>Kanallar :</b> <code>{online_count}/{total_count} Açık</code>\n"
+            f"🕒 <b>Zaman    :</b> <code>{now_str}</code></blockquote>\n\n"
+            "<i>Sunucu bakıma girdi. Tekrar açıldığında anında bildirim gönderilecektir.</i>\n"
+            "🌐 <a href=\"https://www.g-status.com/en-gb/game/metin2\"><b>Canlı G-Status Sayfası ↗</b></a>"
         )
         res = self.send_message(message, parse_mode="HTML", disable_preview=False)
         return bool(res)
@@ -354,12 +346,12 @@ class TelegramNotifier:
         total_count = info.get("total_count", 0)
 
         message = (
-            f"🟢 <b>SUNUCU TEKRAR AÇILDI</b> • <i>{server_upper}</i>\n\n"
-            f"<blockquote>✅ <b>Durum:</b> <code>ONLINE (Çevrimiçi / Açık)</code>\n"
-            f"🌐 <b>Kanal Durumu:</b> <code>{online_count}/{total_count} Kanal Aktif</code>\n"
-            f"🕒 <b>Zaman:</b> <code>{now_str}</code></blockquote>\n\n"
-            "⚔️ <i>Girişler ve oyun kanalları tekrar aktif! İyi oyunlar dileriz.</i>\n"
-            "🌐 <a href=\"https://www.g-status.com/en-gb/game/metin2\"><b>Canlı G-Status Sayfası</b></a>"
+            f"🟢 <b>SUNUCU TEKRAR AÇILDI</b> · <i>{server_upper}</i>\n\n"
+            f"<blockquote>✅ <b>Bağlantı :</b> <code>ONLINE (Erişilebilir)</code>\n"
+            f"🌐 <b>Kanallar :</b> <code>{online_count}/{total_count} Kanal Aktif</code>\n"
+            f"🕒 <b>Zaman    :</b> <code>{now_str}</code></blockquote>\n\n"
+            "<i>Girişler ve oyun kanalları tekrar aktif! İyi oyunlar dileriz.</i>\n"
+            "🌐 <a href=\"https://www.g-status.com/en-gb/game/metin2\"><b>Canlı G-Status Sayfası ↗</b></a>"
         )
         res = self.send_message(message, parse_mode="HTML", disable_preview=False)
         return bool(res)
@@ -374,9 +366,10 @@ class TelegramNotifier:
         d_cd = self.escape_html(display_cd)
 
         caption = (
-            f"🔔 <b>BOSS HAZIR!</b> • <i>{b_name.upper()}</i>\n\n"
-            f"<blockquote>⏳ <b>Bekleme Süresi:</b> <code>{d_cd}</code> tamamlandı!\n"
-            f"⚔️ <b>{b_name}</b> şu anda hazır, gidip kesebilirsiniz.</blockquote>\n\n"
+            f"🔔 <b>BOSS HAZIR!</b> · <i>{b_name.upper()}</i>\n\n"
+            f"<blockquote>⚔️ <b>Hedef  :</b> <b>{b_name}</b>\n"
+            f"⏳ <b>Bekleme:</b> <code>{d_cd}</code> tamamlandı\n"
+            f"🎯 <b>Durum  :</b> <code>Doğdu / Kesilebilir</code></blockquote>\n\n"
             "👉 <i>Tekrar kestiğinizde /bosscd ile yeni sayaç başlatabilirsiniz.</i>"
         )
 
@@ -395,12 +388,11 @@ class TelegramNotifier:
         cet_time = self.escape_html(event.get("cet_time", ""))
 
         message = (
-            "🎁 <b>METİN2 ETKİNLİK BAŞLADI!</b>\n\n"
-            f"<blockquote>🌟 <b>Etkinlik:</b> <b>{ev_name}</b>\n"
-            f"📅 <b>Tarih:</b> <code>{display_date}</code>\n"
-            f"⏰ <b>Süre (TSİ):</b> <code>{tsi_time}</code>\n"
-            f"🌍 <b>Avrupa:</b> <code>{cet_time}</code></blockquote>\n\n"
-            "⚔️ <i>Drop etkinliği başladı! İyi droplar ve bol şanslar dileriz!</i>\n"
+            "🎁 <b>ETKİNLİK BAŞLADI!</b> · <i>Marmara & Bagjanamu</i>\n\n"
+            f"<blockquote>🌟 <b>Etkinlik :</b> <b>{ev_name}</b>\n"
+            f"⏰ <b>Süre (TSİ):</b> <code>{tsi_time}</code> <i>(Avrupa: {cet_time})</i>\n"
+            f"📅 <b>Tarih    :</b> <code>{display_date}</code></blockquote>\n\n"
+            "⚔️ <i>Drop etkinliği başladı! İyi droplar ve bol şanslar dileriz.</i>\n"
             "ℹ️ <i>Tüm takvim için /takvim yazabilirsiniz.</i>"
         )
         res = self.send_message(message, parse_mode="HTML")
@@ -409,15 +401,16 @@ class TelegramNotifier:
     def send_test_message(self, tracked_server: str = "Bagjanamu") -> bool:
         """Send a test message to verify credentials."""
         text = (
-            "🤖 <b>METİN2 BOTU AKTİF</b>\n\n"
-            "<blockquote>✅ Telegram bildirim ayarlarınız eksiksiz şekilde çalışıyor.</blockquote>\n\n"
-            "🔔 <b>Aktif Takip Başlıkları:</b>\n"
-            "• 🔥 <b>Mutlu Saatler:</b> Yeni kampanya ve bitiş alarmı\n"
-            "• ⚙️ <b>Tüm Bakım Duyuruları:</b> Forum duyuruları\n"
-            f"• 🏰 <b>Sunucu Haberleri:</b> Sadece <b>{tracked_server}</b>\n"
-            f"• 🌐 <b>Canlı Sunucu Takibi:</b> <b>{tracked_server}</b> g-status kapandı/açıldı\n"
-            "• ⏳ <b>Boss & Sandık Takibi:</b> /bosscd, /kalan, /sandik, /rapor\n"
-            "• 📅 <b>Etkinlik Takvimi:</b> /takvim\n\n"
+            "🤖 <b>METİN2 ASİSTANI AKTİF</b>\n\n"
+            f"<blockquote>✅ <b>Telegram Bağlantısı :</b> <code>Kusursuz (Online)</code>\n"
+            f"🛡️ <b>İzlenen Sunucu   :</b> <b>{tracked_server}</b></blockquote>\n\n"
+            "<b>Aktif Takip Modülleri:</b>\n"
+            "<blockquote>• 🔥 <b>Mutlu Saatler :</b> Başlangıç & Bitiş Bildirimi\n"
+            "• ⚙️ <b>Bakım Takibi  :</b> Canlı G-Status & Forum Duyuruları\n"
+            f"• 🏰 <b>Sunucu Haberi :</b> <b>{tracked_server}</b> Özel Filtresi\n"
+            "• ⏱️ <b>Boss Sayacı   :</b> Soğuma Süresi & Fotoğraflı Alarm\n"
+            "• 📦 <b>Sandık Takibi :</b> Hasılat Kaydı, Rapor & Düşürme\n"
+            "• 📅 <b>Drop Takvimi  :</b> Canlı Etkinlik Başlangıç Alarmı</blockquote>\n\n"
             "🛡️ <i>Sistem hazır, komutları kullanmaya başlayabilirsiniz!</i>"
         )
         res = self.send_message(text, parse_mode="HTML")
